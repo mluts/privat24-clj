@@ -27,7 +27,17 @@
 (defprotocol SessionRole
   (business-role? [this])
   (message [this])
-  (otp-numbers [this]))
+  (otp-devices [this]))
+
+(defprotocol OTPDevice
+  (id [this])
+  (number [this]))
+
+(deftype PB24OTPDevice
+  [raw]
+  OTPDevice
+  (id [_] (:id raw))
+  (number [_] (:number raw)))
 
 (deftype PB24Response
   [raw]
@@ -51,8 +61,8 @@
                               (some #(= "ROLE_P24_BUSINESS" %))))
   (message [_] (let [msg (:message data)]
                  (when-not (coll? msg) msg)))
-  (otp-numbers [_] (let [msg (:message data)]
-                     (if (coll? msg) msg []))))
+  (otp-devices [_] (let [msg (:message data)]
+                     (if (coll? msg) (map #(PB24OTPDevice. %) msg) []))))
 
 (defn- make-uri [path] (str base-uri path))
 
@@ -155,9 +165,52 @@
                 :endate end-date
                 :showInf ""}
         response (get-request path params b-session)]
-    (if [err (.error response)]
+    (if-let [err (.error response)]
       [response err]
       [(.data response) nil])))
+
+(defn- perform-otp-auth
+  [b-session
+   ask-otp-fn
+   ask-otp-dev-fn]
+  (cond
+    (.business-role? b-session) [b-session nil]
+    (seq (.otp-devices b-session)) (let [devices (.otp-devices b-session)
+                                         otp-index (int (ask-otp-dev-fn devices))
+                                         device (nth devices otp-index)]
+                                     (let [[msg err] (select-otp-device b-session (:id device))]
+                                       (if err
+                                         [msg err]
+                                         (let [otp (ask-otp-fn)]
+                                           (check-otp b-session otp)))))
+    :else (let [otp (ask-otp-fn)]
+            (check-otp b-session otp))))
+
+(defn default-ask-otp
+  []
+  (println "Please enter OTP: ")
+  (->> *in*
+       clojure.java.io/reader
+       line-seq
+       first))
+
+(defn default-ask-otp-dev
+  [devs]
+  (println "Select otp device:")
+  (doall (map-indexed #(println (str %1 ": " (.number %2)))
+                      devs)))
+
+(defn authenticate-full
+  ([] (authenticate-full default-ask-otp default-ask-otp-dev))
+  ([ask-otp-fn
+    ask-otp-dev-fn]
+   (let [[session err] (create-session)]
+     (if err
+       [nil err]
+       (let [[b-session err] (create-business-session session)]
+         (if err
+           [nil err]
+           (perform-otp-auth b-session ask-otp-fn ask-otp-dev-fn)))))))
 
 (defn -main
   "I don't do a whole lot ... yet."
