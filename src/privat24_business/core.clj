@@ -65,8 +65,16 @@
   ([error-fn response]
    [response (error-fn response)]))
 
-(defn post
-  ([path data] (post path data default-headers))
+(defn get-request
+  ([path params session]
+   (let [uri (make-uri path)
+         headers (with-default-headers
+                   {:authorization (str "Token " (.token session))})]
+     (log/info "GET" uri headers params)
+     (PB24Response. (http/get uri {:query-params params :headers headers})))))
+
+(defn post-request
+  ([path data] (post-request path data default-headers))
   ([path data headers]
    
    (let [uri (make-uri path)
@@ -76,10 +84,9 @@
      (PB24Response.
        (http/post
          uri
-         (merge
-           headers
-           {:body body}
-           {:throw-exceptions false}))))))
+         {:body body
+          :headers headers
+          :throw-exceptions false})))))
 
 (defn create-session
   "Sends request for getting basic client session
@@ -89,7 +96,7 @@
    (let [path "/auth/createSession"
          data {:clientId client-id#
                :clientSecret client-secret#}
-         response (post path data)]
+         response (post-request path data)]
      (if-let [err (.error response)]
        [response err]
        [(PB24Session. (.data response)) nil]))))
@@ -98,19 +105,19 @@
   [session]
   (let [path "/auth/validatesession"
         data {:sessionId (.token session)}
-        response (post path data)]
+        response (post-request path data)]
     (.success? response)))
 
 (defn create-business-session
   "Sens request for getting business client session
   returns [session err]"
-  ([session] (create-business-session pb24b-login pb24b-password))
+  ([session] (create-business-session session pb24b-login pb24b-password))
   ([session pb24b-login pb24b-password]
    (let [path "/p24BusinessAuth/createSession"
          data {:sessionId (.token session)
                :login pb24b-login
                :password pb24b-password}
-         response (post path data)]
+         response (post-request path data)]
      (if-let [err (.error response)]
        [response err]
        [(PB24Session. (.data response)) nil]))))
@@ -121,7 +128,7 @@
   (let [path "/p24BusinessAuth/sendOtp"
         data {:sessionId (.token b-session)
               :otpDev device-id}
-        response (post path data)]
+        response (post-request path data)]
     (if-let [err (.error response)]
       [response err]
       [(->> response .data :message) nil])))
@@ -132,13 +139,25 @@
   (let [path "/p24BusinessAuth/checkOtp"
         data {:sessionId (.token b-session)
               :otp otp}
-        response (post path data)
+        response (post-request path data)
         new-session (PB24Session. (.data response))
         err (.error response)]
     (cond
       err [response err]
-      (->> new-session business-session? not) [response (->> response .data :message)]
+      (->> new-session .business-role? not) [response (->> response .data :message)]
       :else [new-session nil])))
+
+(defn business-statements
+  "Requests statements for all accounts from/to given dates"
+  [b-session start-date end-date]
+  (let [path  "/p24b/statements/"
+        params {:stdate start-date
+                :endate end-date
+                :showInf ""}
+        response (get-request path params b-session)]
+    (if [err (.error response)]
+      [response err]
+      [(.data response) nil])))
 
 (defn -main
   "I don't do a whole lot ... yet."
