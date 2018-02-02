@@ -70,11 +70,6 @@
   ([] default-headers)
   ([& h] (apply merge default-headers h)))
 
-(defn- with-error
-  ([response] (with-error #(.error %) response))
-  ([error-fn response]
-   [response (error-fn response)]))
-
 (defn get-request
   ([path params session]
    (let [uri (make-uri path)
@@ -197,7 +192,9 @@
 (defn default-ask-otp-dev
   [devs]
   (println "Select otp device:")
-  (doall (map-indexed #(println (str %1 ": " (.number %2)))
+  (doall (map-indexed (fn
+                        [index dev]
+                        (str index ": " (.number dev)))
                       devs)))
 
 (defn authenticate-full
