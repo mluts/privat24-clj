@@ -1,4 +1,4 @@
-(ns privat24-business.core
+(ns privat24-clj.core
   (:gen-class)
   (:require [clj-http.client :as http]
             [cheshire.core :as json]
@@ -108,7 +108,6 @@
 (defn create-session
   "Sends request for getting basic client session
    returns [session err]"
-  ([] (create-session client-id client-secret))
   ([client-id client-secret]
    (let [path "/auth/createSession"
          data {:clientId client-id
@@ -128,7 +127,6 @@
 (defn create-business-session
   "Sens request for getting business client session
   returns [session err]"
-  ([session] (create-business-session session pb24b-login pb24b-password))
   ([session pb24b-login pb24b-password]
    (let [path "/p24BusinessAuth/createSession"
          data {:sessionId (.token session)
@@ -209,25 +207,58 @@
       (check-otp b-session otp))))
 
 (defn authenticate-full
-  ([] (authenticate-full default-ask-otp default-ask-otp-dev))
-  ([ask-otp-fn ask-otp-dev-fn]
-   (log/info "Performing authentication")
-   (->> (create-session)
-       (bind-error create-business-session)
-       (bind-error #(handle-otp-dev-step % ask-otp-dev-fn))
-       (bind-error #(handle-otp-step % ask-otp-fn)))))
+  ([credentials ask-otp-fn ask-otp-dev-fn]
+   {:pre [(vector? credentials)
+          (= 4 (count credentials))
+          (every? fn? [ask-otp-fn ask-otp-dev-fn])]}
 
-(defn authenticated-request
-  [req & args]
-  (future (await b-session-and-err)
-          (let [[b-session err] @b-session-and-err]
-            (cond
-              err [nil err]
-              (or (not b-session)
-                  (expired? b-session)) (do
-                                          (send b-session-and-err (fn [_] (authenticate-full)))
-                                          @(apply authenticated-request req args))
-              :else (apply req b-session args)))))
+   (log/info "Performing authentication")
+   (let [[client-id client-secret pb24b-login pb24b-password] credentials]
+     (->> (create-session client-id client-secret)
+          (bind-error #(create-business-session % pb24b-login pb24b-password))
+          (bind-error #(handle-otp-dev-step % ask-otp-dev-fn))
+          (bind-error #(handle-otp-step % ask-otp-fn))))))
+
+(defmulti authenticated-request
+  (fn [arg & args]
+    (if (fn? arg)
+      :default-credentials
+      :custom-credentials)))
+
+(defmethod authenticated-request :default-credentials
+  ([req & args] (apply authenticated-request
+                       [client-id client-secret
+                        pb24b-login pb24b-password]
+                       default-ask-otp
+                       default-ask-otp-dev
+                       req
+                       args)))
+
+(defmethod authenticated-request :custom-credentials
+  ([credentials ask-otp-fn ask-otp-dev-fn req & args]
+   {:pre [(vector? credentials)
+          (= 4 (count credentials))
+          (every? fn? [ask-otp-fn ask-otp-dev-fn req])]}
+
+   (future (await b-session-and-err)
+           (let [[b-session err] @b-session-and-err]
+             (cond
+               err [nil err]
+               (or (not b-session)
+                   (expired? b-session)) (let [auth-fn (fn [_] (authenticate-full
+                                                                 credentials
+                                                                 ask-otp-fn
+                                                                 ask-otp-dev-fn))]
+                                           (send b-session-and-err auth-fn)
+                                           @(apply authenticated-request
+                                                   credentials
+                                                   ask-otp-fn
+                                                   ask-otp-dev-fn
+                                                   req
+                                                   args))
+               :else (do
+                       (log/info req b-session args)
+                       (apply req b-session args)))))))
 
 (defn -main
   "I don't do a whole lot ... yet."
