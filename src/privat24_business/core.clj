@@ -15,6 +15,12 @@
 (def default-headers {:content-type "application/json"
                       :accept "application/json"})
 
+(def ^:const ttl-delta 30) ; 30 seconds
+
+(def b-session-and-err (agent [nil nil]))
+
+(defn- timestamp [] (int (/ (System/currentTimeMillis) 1000)))
+
 (defprotocol Response
   (success? [_])
   (error [_])
@@ -51,8 +57,8 @@
 
 (deftype PB24Session [data]
   Session
-  (expired? [_] (int (<= (:expiresIn data)
-                         (System/currentTimeMillis))))
+  (expired? [_] (<= (:expiresIn data)
+                    (- (timestamp) ttl-delta)))
   (token [_] (:id data))
 
   SessionRole
@@ -63,6 +69,12 @@
                  (when-not (coll? msg) msg)))
   (otp-devices [_] (let [msg (:message data)]
                      (if (coll? msg) (map #(PB24OTPDevice. %) msg) []))))
+
+(defn- bind-error
+  [f [val err]]
+  (if err
+    [val err]
+    (f val)))
 
 (defn- make-uri [path] (str base-uri path))
 
@@ -85,7 +97,7 @@
    (let [uri (make-uri path)
          headers (with-default-headers headers)
          body (json/encode data)]
-     (log/info "POST" uri body headers)
+     (log/info "POST" uri headers)
      (PB24Response.
        (http/post
          uri
@@ -97,10 +109,10 @@
   "Sends request for getting basic client session
    returns [session err]"
   ([] (create-session client-id client-secret))
-  ([client-id# client-secret#]
+  ([client-id client-secret]
    (let [path "/auth/createSession"
-         data {:clientId client-id#
-               :clientSecret client-secret#}
+         data {:clientId client-id
+               :clientSecret client-secret}
          response (post-request path data)]
      (if-let [err (.error response)]
        [response err]
@@ -164,23 +176,6 @@
       [response err]
       [(.data response) nil])))
 
-(defn- perform-otp-auth
-  [b-session
-   ask-otp-fn
-   ask-otp-dev-fn]
-  (cond
-    (.business-role? b-session) [b-session nil]
-    (seq (.otp-devices b-session)) (let [devices (.otp-devices b-session)
-                                         otp-index (int (ask-otp-dev-fn devices))
-                                         device (nth devices otp-index)]
-                                     (let [[msg err] (select-otp-device b-session (:id device))]
-                                       (if err
-                                         [msg err]
-                                         (let [otp (ask-otp-fn)]
-                                           (check-otp b-session otp)))))
-    :else (let [otp (ask-otp-fn)]
-            (check-otp b-session otp))))
-
 (defn default-ask-otp
   []
   (println "Please enter OTP: ")
@@ -191,23 +186,48 @@
 
 (defn default-ask-otp-dev
   [devs]
-  (println "Select otp device:")
-  (doall (map-indexed (fn
-                        [index dev]
-                        (str index ": " (.number dev)))
-                      devs)))
+  (println "Select otp device: ")
+  (->> devs
+       (map-indexed (fn [i dev] (str i ": " (.number dev))))
+       (map println)
+       doall))
+
+(defn handle-otp-dev-step
+  [b-session ask-otp-dev-fn]
+  (if (seq (.otp-devices b-session))
+    (let [devices (.otp-devices b-session)
+          otp-index (int (ask-otp-dev-fn devices))
+          device (nth devices otp-index)]
+      (select-otp-device b-session (:id device)))
+    [b-session nil]))
+
+(defn handle-otp-step
+  [b-session ask-otp-fn]
+  (if (.business-role? b-session)
+    [b-session nil]
+    (let [otp (ask-otp-fn)]
+      (check-otp b-session otp))))
 
 (defn authenticate-full
   ([] (authenticate-full default-ask-otp default-ask-otp-dev))
-  ([ask-otp-fn
-    ask-otp-dev-fn]
-   (let [[session err] (create-session)]
-     (if err
-       [nil err]
-       (let [[b-session err] (create-business-session session)]
-         (if err
-           [nil err]
-           (perform-otp-auth b-session ask-otp-fn ask-otp-dev-fn)))))))
+  ([ask-otp-fn ask-otp-dev-fn]
+   (log/info "Performing authentication")
+   (->> (create-session)
+       (bind-error create-business-session)
+       (bind-error #(handle-otp-dev-step % ask-otp-dev-fn))
+       (bind-error #(handle-otp-step % ask-otp-fn)))))
+
+(defn authenticated-request
+  [req & args]
+  (future (await b-session-and-err)
+          (let [[b-session err] @b-session-and-err]
+            (cond
+              err [nil err]
+              (or (not b-session)
+                  (expired? b-session)) (do
+                                          (send b-session-and-err (fn [_] (authenticate-full)))
+                                          @(apply authenticated-request req args))
+              :else (apply req b-session args)))))
 
 (defn -main
   "I don't do a whole lot ... yet."
