@@ -256,9 +256,7 @@
                                                    ask-otp-dev-fn
                                                    req
                                                    args))
-               :else (do
-                       (log/info req b-session args)
-                       (apply req b-session args)))))))
+               :else (apply req b-session args))))))
 
 (defn -main
   "I don't do a whole lot ... yet."
