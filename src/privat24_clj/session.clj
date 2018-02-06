@@ -2,7 +2,7 @@
   (:require [privat24-clj.api :as api]
             [clojure.tools.logging :as log]))
 
-(def ^:private b-session-and-err [nil nil])
+(def ^:private b-session-and-err (agent [nil nil]))
 
 (defn- bind-error
   [f [val err]] (if err [val err] (f val)))
@@ -38,12 +38,15 @@
 
 (defn refresh-b-session
   [& auth-args]
-  (locking b-session-and-err
-    (let [[b-session err] b-session-and-err]
+  (send
+    b-session-and-err
+    (fn
+      [[b-session err old-value :as all]]
       (cond
-        err [nil err]
-        (or (not b-session) (.expired? b-session)) (let [result (apply authenticate-b-session
-                                                                      auth-args)]
-                                                    (def b-session-and-err result)
-                                                    result)
-        :else b-session-and-err))))
+        err old-value
+        (or (not b-session)
+            (.expired? b-session)) (try (apply authenticate-b-session auth-args)
+                                        (catch Exception e [nil (.getMessage e)]))
+        :else old-value)))
+  (await b-session-and-err)
+  @b-session-and-err)
