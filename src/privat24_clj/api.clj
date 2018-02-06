@@ -1,23 +1,15 @@
-(ns privat24-clj.core
-  (:gen-class)
+(ns privat24-clj.api
   (:require [clj-http.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [slingshot.slingshot :refer [try+]]))
 
-(def client-id (System/getenv "PRIVAT24_CLIENT_ID"))
-(def client-secret (System/getenv "PRIVAT24_CLIENT_SECRET"))
-
-(def pb24b-login (System/getenv "PRIVAT24_BUSINESS_LOGIN"))
-(def pb24b-password (System/getenv "PRIVAT24_BUSINESS_PASSWORD"))
-
 (def base-uri "https://link.privatbank.ua/api")
+
 (def default-headers {:content-type "application/json"
                       :accept "application/json"})
 
 (def ^:const ttl-delta 30) ; 30 seconds
-
-(def b-session-and-err (agent [nil nil]))
 
 (defn- timestamp [] (int (/ (System/currentTimeMillis) 1000)))
 
@@ -69,12 +61,6 @@
                  (when-not (coll? msg) msg)))
   (otp-devices [_] (let [msg (:message data)]
                      (if (coll? msg) (map #(PB24OTPDevice. %) msg) []))))
-
-(defn- bind-error
-  [f [val err]]
-  (if err
-    [val err]
-    (f val)))
 
 (defn- make-uri [path] (str base-uri path))
 
@@ -173,92 +159,3 @@
     (if-let [err (.error response)]
       [response err]
       [(.data response) nil])))
-
-(defn default-ask-otp
-  []
-  (println "Please enter OTP: ")
-  (->> *in*
-       clojure.java.io/reader
-       line-seq
-       first))
-
-(defn default-ask-otp-dev
-  [devs]
-  (println "Select otp device: ")
-  (->> devs
-       (map-indexed (fn [i dev] (str i ": " (.number dev))))
-       (map println)
-       doall))
-
-(defn handle-otp-dev-step
-  [b-session ask-otp-dev-fn]
-  (if (seq (.otp-devices b-session))
-    (let [devices (.otp-devices b-session)
-          otp-index (int (ask-otp-dev-fn devices))
-          device (nth devices otp-index)]
-      (select-otp-device b-session (:id device)))
-    [b-session nil]))
-
-(defn handle-otp-step
-  [b-session ask-otp-fn]
-  (if (.business-role? b-session)
-    [b-session nil]
-    (let [otp (ask-otp-fn)]
-      (check-otp b-session otp))))
-
-(defn authenticate-full
-  ([credentials ask-otp-fn ask-otp-dev-fn]
-   {:pre [(vector? credentials)
-          (= 4 (count credentials))
-          (every? fn? [ask-otp-fn ask-otp-dev-fn])]}
-
-   (log/info "Performing authentication")
-   (let [[client-id client-secret pb24b-login pb24b-password] credentials]
-     (->> (create-session client-id client-secret)
-          (bind-error #(create-business-session % pb24b-login pb24b-password))
-          (bind-error #(handle-otp-dev-step % ask-otp-dev-fn))
-          (bind-error #(handle-otp-step % ask-otp-fn))))))
-
-(defmulti authenticated-request
-  (fn [arg & args]
-    (if (fn? arg)
-      :default-credentials
-      :custom-credentials)))
-
-(defmethod authenticated-request :default-credentials
-  ([req & args] (apply authenticated-request
-                       [client-id client-secret
-                        pb24b-login pb24b-password]
-                       default-ask-otp
-                       default-ask-otp-dev
-                       req
-                       args)))
-
-(defmethod authenticated-request :custom-credentials
-  ([credentials ask-otp-fn ask-otp-dev-fn req & args]
-   {:pre [(vector? credentials)
-          (= 4 (count credentials))
-          (every? fn? [ask-otp-fn ask-otp-dev-fn req])]}
-
-   (future (await b-session-and-err)
-           (let [[b-session err] @b-session-and-err]
-             (cond
-               err [nil err]
-               (or (not b-session)
-                   (expired? b-session)) (let [auth-fn (fn [_] (authenticate-full
-                                                                 credentials
-                                                                 ask-otp-fn
-                                                                 ask-otp-dev-fn))]
-                                           (send b-session-and-err auth-fn)
-                                           @(apply authenticated-request
-                                                   credentials
-                                                   ask-otp-fn
-                                                   ask-otp-dev-fn
-                                                   req
-                                                   args))
-               :else (apply req b-session args))))))
-
-(defn -main
-  "I don't do a whole lot ... yet."
-  [& args]
-  (println "Hello, World!"))
