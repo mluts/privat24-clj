@@ -1,7 +1,8 @@
 (ns privat24-clj.api
   (:require [clj-http.client :as http]
             [cheshire.core :as json]
-            [clojure.tools.logging :as log]
+            [taoensso.timbre :as log]
+            [privat24-clj.util :refer [<-json ->json]]
             [slingshot.slingshot :refer [try+]]))
 
 (def base-uri "https://link.privatbank.ua/api")
@@ -14,6 +15,7 @@
 (defn- timestamp [] (int (/ (System/currentTimeMillis) 1000)))
 
 (defprotocol Response
+  (status [_])
   (success? [_])
   (error [_])
   (data [_]))
@@ -31,23 +33,22 @@
   (id [this])
   (number [this]))
 
-(deftype PB24OTPDevice
-  [raw]
+(defrecord PB24OTPDevice [raw]
   OTPDevice
   (id [_] (:id raw))
   (number [_] (:number raw)))
 
-(deftype PB24Response
-  [raw]
+(defrecord PB24Response [raw]
   Response
-  (success? [_] (<= 200 (:status raw) 299))
+  (status [_] (:status raw))
+  (success? [this] (<= 200 (.status this) 299))
   (error [this] (when-not (.success? this)
                   (-> this (.data) :error)))
   (data [this] (let [body (:body raw)]
-                 (try+ (json/decode body keyword)
+                 (try+ (<-json body)
                      (catch com.fasterxml.jackson.core.JsonParseException _ {})))))
 
-(deftype PB24Session [data]
+(defrecord PB24Session [data]
   Session
   (expired? [_] (<= (:expiresIn data)
                     (- (timestamp) ttl-delta)))
@@ -68,7 +69,7 @@
   ([] default-headers)
   ([& h] (apply merge default-headers h)))
 
-(defn get-request
+(defn- get-request
   ([path params session]
    (let [uri (make-uri path)
          headers (with-default-headers
@@ -76,13 +77,13 @@
      (log/info "GET" uri headers params)
      (PB24Response. (http/get uri {:query-params params :headers headers})))))
 
-(defn post-request
+(defn- post-request
   ([path data] (post-request path data default-headers))
   ([path data headers]
    
    (let [uri (make-uri path)
          headers (with-default-headers headers)
-         body (json/encode data)]
+         body (->json data)]
      (log/info "POST" uri headers)
      (PB24Response.
        (http/post
@@ -105,10 +106,12 @@
 
 (defn validate-session
   [session]
-  (let [path "/auth/validatesession"
+  (let [path "/auth/validateSession"
         data {:sessionId (.token session)}
         response (post-request path data)]
-    (.success? response)))
+    (if (.success? response)
+      [true nil]
+      [false (str (.status response) (.data response))])))
 
 (defn create-business-session
   "Sens request for getting business client session

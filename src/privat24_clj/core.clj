@@ -1,55 +1,59 @@
 (ns privat24-clj.core
-  (:gen-class)
-  (:require [privat24-clj.session :as session]
-            [privat24-clj.api :as api]))
+  (:require [privat24-clj.cli :as cli]
+            [privat24-clj.util :refer [->json]]
+            [clojure.tools.cli :as opts]
+            [clojure.string :as string]
+            [taoensso.timbre :as timbre])
+  (:gen-class))
 
-(def client-id (System/getenv "PRIVAT24_CLIENT_ID"))
-(def client-secret (System/getenv "PRIVAT24_CLIENT_SECRET"))
+(defn check-auth []
+  (let [[res err] (cli/check-auth)]
+    (if res
+      (println "OK")
+      (println "ERR: " err))))
 
-(def pb24b-login (System/getenv "PRIVAT24_BUSINESS_LOGIN"))
-(def pb24b-password (System/getenv "PRIVAT24_BUSINESS_PASSWORD"))
+(defn business-statements [date-start date-end]
+  (let [[res err] (cli/business-statements date-start date-end)]
+    (if err
+      (println "ERR: " err)
+      (println (->json res)))))
 
-(defn- bind-error
-  [f [val err]]
-  (if err [val err] (f val)))
+(def cli-options
+  [["-v" "--verbose"]])
 
-(defn default-ask-otp
-  []
-  (println "Please enter OTP: ")
-  (->> *in*
-       clojure.java.io/reader
-       line-seq
-       first))
+(def commands
+  {"check-auth" check-auth
+   "business-statements" business-statements})
 
-(defn default-ask-otp-dev
-  [devs]
-  (println "Select otp device: ")
-  (->> devs
-       (map-indexed (fn [i dev] (str i ": " (.number dev))))
-       (map println)
-       doall))
+(def help-msg
+  [(string/join " " (concat ["Available arguments:"]
+                            (keys commands)))])
 
-(defmulti authenticated-request
-  (fn [arg & args]
-    (if (fn? arg)
-      :default-credentials
-      :custom-credentials)))
+(defn show-help [errors opts-summary]
+  (doseq [line (concat errors help-msg [opts-summary])]
+    (println line))
+  [])
 
-(defmethod authenticated-request :default-credentials
-  ([req & args] (apply authenticated-request
-                       [[client-id client-secret
-                         pb24b-login pb24b-password]
-                        default-ask-otp
-                        default-ask-otp-dev]
-                       req
-                       args)))
+(defn parse-opts [args]
+  (let [parsed-args (opts/parse-opts args cli-options)
+        {:keys [options arguments errors summary]} parsed-args
+        [cmd & cmd-args] arguments]
+    (cond
+      (not-empty errors) (show-help errors summary)
+      (empty? arguments) (show-help [] summary)
+      (not (contains? commands (str cmd))) (show-help [(str "Unknown command: " cmd)] summary)
+      :else [cmd cmd-args options])))
 
-(defmethod authenticated-request :custom-credentials
-  ([auth-args req & args]
-   (->> (apply session/refresh-b-session auth-args)
-        (bind-error #(apply req % args)))))
+(defn process-opts [options]
+  (timbre/set-level! (if (:verbose options) :debug :warn)))
+
+(defn process-cmd [cmd cmd-args]
+  (apply (get commands cmd) cmd-args))
 
 (defn -main
-  "I don't do a whole lot ... yet."
+  "CLI entry point"
   [& args]
-  (println "Hello, World!"))
+  (let [[cmd cmd-args opts :as all] (parse-opts args)]
+    (when (not-empty all)
+      (process-opts opts)
+      (process-cmd cmd cmd-args))))
