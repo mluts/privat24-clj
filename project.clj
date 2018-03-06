@@ -7,6 +7,7 @@
                  [org.clojure/tools.cli "0.3.5"]
                  [clj-http "3.7.0"]
                  [clj-http-fake "1.0.3"]
+                 [clj-time "0.14.2"]
                  [cheshire "5.8.0"]
                  [slingshot "0.12.2"]
                  [com.taoensso/timbre "4.10.0"]]

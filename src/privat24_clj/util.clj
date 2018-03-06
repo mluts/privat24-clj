@@ -7,3 +7,6 @@
 (defn ->json [data] (json/encode data))
 
 (defn <-json [str] (json/decode str keyword))
+
+(defn parse-float [str]
+  (Float/parseFloat str))
