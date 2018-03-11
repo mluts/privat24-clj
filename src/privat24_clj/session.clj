@@ -1,45 +1,61 @@
 (ns privat24-clj.session
   (:require [privat24-clj.api :as api]
-            [privat24-clj.util :refer [bind-error]]
-            [taoensso.timbre :as log])
-  (:import [privat24_clj.api PB24Session]))
+            [taoensso.timbre :as log]))
 
-(defn- get-otp-device-id [devices ask-otp-dev-fn]
-  (let [otp-index (ask-otp-dev-fn devices)
-        device (nth devices otp-index)]
-    (:id device)))
+(defn get-otp-device-id [devices ask-otp-dev-fn]
+  {:pre [(sequential? devices)
+         (every? #(and (contains? % :id)
+                       (contains? % :number))
+                 devices)]}
+  (as-> (ask-otp-dev-fn devices) $
+    (nth devices $ {})
+    (:id $)))
 
-(defn- handle-otp-dev-step [b-session ask-otp-dev-fn]
-  {:pre [(instance? PB24Session b-session)
-         (fn? ask-otp-dev-fn)]}
+(defn handle-business-session-step [pb24b-login pb24b-password response]
+  {:pre [(string? pb24b-login)
+         (string? pb24b-password)
+         (map? response)]}
+  (log/info "Upgrading session step")
+  (api/create-business-session (get-in response [:session :token])
+                               pb24b-login
+                               pb24b-password))
+
+(defn handle-otp-dev-step [ask-otp-dev-fn response]
+  {:pre [(fn? ask-otp-dev-fn)]}
   (log/info "Handling otp dev step")
-  (let [devices (.otp-devices b-session)]
-    (if (seq devices)
-     (api/select-otp-device b-session
-                            (get-otp-device-id devices ask-otp-dev-fn))
-     [b-session nil])))
+  (let [devices (get-in response [:session :otp-devices])]
+    (if (and (sequential? devices) (not-empty devices))
+      (api/select-otp-device (get-in response [:session :token])
+                             (get-otp-device-id devices ask-otp-dev-fn))
+      response)))
 
-(defn- handle-otp-step [b-session ask-otp-fn]
+(defn handle-otp-step [ask-otp-fn response]
+  {:pre [(map? response) (fn? ask-otp-fn)]}
   (log/info "Handling otp step")
-  (if (.business-role? b-session)
-    [b-session nil]
-    (let [otp (ask-otp-fn)]
-      (api/check-otp b-session otp))))
+  (if (get-in response [:session :is-business-role])
+    response
+    (let [otp (ask-otp-fn)
+          token (get-in response [:session :token])
+          response (api/check-otp token otp)]
+      (cond
+        (:error response) response
+        (not (get-in response [:session :is-business-role])) (assoc response
+                                                                    :error
+                                                                    "Failed to authenticate business role")
+        :else response))))
 
-(defn authenticate-b-session ([credentials ask-otp-fn ask-otp-dev-fn]
-   {:pre [(map? credentials)
-          (= 4 (count credentials))
-          (every? fn? [ask-otp-fn ask-otp-dev-fn])]}
+(defn authenticate-b-session [credentials ask-otp-fn ask-otp-dev-fn]
+  "Returns parsed response"
+  {:pre [(map? credentials)
+         (= 4 (count credentials))
+         (every? fn? [ask-otp-fn ask-otp-dev-fn])]}
 
-   (log/info "Performing authentication")
-   (let [{:keys [client-id client-secret pb24b-login pb24b-password]} credentials]
-     (as-> (api/create-session client-id client-secret) $
-       (bind-error api/create-business-session $ pb24b-login pb24b-password)
-       (bind-error handle-otp-dev-step $ ask-otp-dev-fn)
-       (bind-error handle-otp-step $ ask-otp-fn)))))
-
-(defn refresh-b-session [b-session & auth-args]
-  {:pre [(instance? PB24Session b-session)]}
-  (if (.expired? b-session)
-    (apply authenticate-b-session auth-args)
-    [b-session nil]))
+  (log/info "Performing authentication")
+  (let [{:keys [client-id client-secret pb24b-login pb24b-password]} credentials
+        call-step-fn (fn [response step-fn]
+                       (if (:error response) response (step-fn response)))]
+    (reduce call-step-fn
+            (api/create-session client-id client-secret)
+            [(partial handle-business-session-step pb24b-login pb24b-password)
+             (partial handle-otp-dev-step ask-otp-dev-fn)
+             (partial handle-otp-step ask-otp-fn)])))

@@ -7,6 +7,8 @@
    [7 9]
    [10 12]])
 
+(def ^:const ukraine-quarter-tax-percent 5)
+
 (defn last-quarters
   ([n]
    {:pre [(int? n)]}

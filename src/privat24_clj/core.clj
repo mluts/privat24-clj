@@ -7,16 +7,16 @@
   (:gen-class))
 
 (defn check-auth []
-  (let [[res err] (cli/check-auth)]
-    (if res
-      (println "OK")
-      (println "ERR: " err))))
+  (let [{:keys [error]} (cli/check-auth)]
+    (if error
+      (println "ERR: " error)
+      (println "OK"))))
 
 (defn business-statements [date-start date-end]
-  (let [[res err] (cli/business-statements date-start date-end)]
-    (if err
-      (println "ERR: " err)
-      (println (->json res)))))
+  (let [{:keys [error data]} (cli/business-statements date-start date-end)]
+    (if error
+      (println "ERR: " error)
+      (println (->json data)))))
 
 (def cli-options
   [["-v" "--verbose"]])
