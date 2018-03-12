@@ -6,24 +6,40 @@
             [taoensso.timbre :as timbre])
   (:gen-class))
 
-(defn check-auth []
+(defn check-auth [opts]
   (let [{:keys [error]} (cli/check-auth)]
     (if error
       (println "ERR: " error)
       (println "OK"))))
 
-(defn business-statements [date-start date-end]
+(defn business-statements [opts date-start date-end]
   (let [{:keys [error data]} (cli/business-statements date-start date-end)]
     (if error
       (println "ERR: " error)
       (println (->json data)))))
 
+(defn get-token [opts]
+  (-> (cli/get-token)
+      (get-in [:session :token])
+      str
+      println))
+
+(defn tax-report [opts]
+  (let [{:keys [error] :as data} (cli/current-quarter-tax-report)]
+    (if error
+      (println "ERR: " error)
+      (println (->json data)))))
+
 (def cli-options
-  [["-v" "--verbose"]])
+  [["-v" "--verbose"]
+   "-C" "--credit-accounts ACCOUNT[,ACCOUNT...]" "Credit account numbers separated by comma"
+   :parse-fn #(string/split % #",")])
 
 (def commands
   {"check-auth" check-auth
-   "business-statements" business-statements})
+   "business-statements" business-statements
+   "get-token" get-token
+   "tax-report" tax-report})
 
 (def help-msg
   [(string/join " " (concat ["Available arguments:"]
@@ -56,4 +72,4 @@
   (let [[cmd cmd-args opts :as all] (parse-opts args)]
     (when (not-empty all)
       (process-opts opts)
-      (process-cmd cmd cmd-args))))
+      (process-cmd cmd opts cmd-args))))

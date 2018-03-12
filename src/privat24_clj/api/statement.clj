@@ -1,14 +1,16 @@
-(ns privat24-clj.business-statements
+(ns privat24-clj.api.statement
   (:require [privat24-clj.util :as util]
-            [privat24-clj.taxes :as tax]
             [privat24-clj.util :as util]
             [clj-time.format :as f]))
 
-(defn- date-formatter []
+(defn date-formatter []
   (f/formatter "dd.MM.yyyy"))
 
-(defn- format-date [date-time]
+(defn format-date [date-time]
   (f/unparse (date-formatter) date-time))
+
+(defn statement-post-date-formatter []
+  (f/formatter "yyyyMMdd'T'HH:mm:ss"))
 
 (defn detect-currency-rate [row]
   (let [detect-by-purpose (fn [row]
@@ -25,19 +27,16 @@
    :currency (get-in row [:amount (keyword "@ccy")])
    :purpose (:purpose row)
    :detected-currency-rate (detect-currency-rate row)
+   :datetime (when-let [post-date (get-in row [:info (keyword "@postdate")])]
+               (f/parse (statement-post-date-formatter) post-date))
    :raw row})
 
-(defn current-quarter-range []
-  (let [quarter (-> (tax/last-quarters 1) first)]
-    (map format-date quarter)))
+(defn statement-state [statement]
+  (case (get-in statement [:raw :info (keyword "@state")])
+    "r" :done
+    "t" :rollback))
 
-(defn prev-quarter-range []
-  (let [quarter (-> (tax/last-quarters 2) last)]
-    (map format-date quarter)))
-
-(defn last-quarters-range [n]
-  (let [quarters (tax/last-quarters n)
-        end-date (-> (first quarters) second)
-        start-date (-> (last quarters) first)]
-    [(format-date start-date)
-     (format-date end-date)]))
+(defn statement-type [statement]
+  (case (get-in statement [:raw :info (keyword "@flinfo")])
+    "r" :real
+    "i" :info))

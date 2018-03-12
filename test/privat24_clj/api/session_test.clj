@@ -1,7 +1,7 @@
-(ns privat24-clj.session-test
+(ns privat24-clj.api.session-test
   (:require [clojure.test :refer :all]
             [privat24-clj.api :as api]
-            [privat24-clj.session :refer :all]))
+            [privat24-clj.api.session :refer :all]))
 
 (deftest authenticate-b-session-test
   (let [credentials {:client-id "id" :client-secret "client-secret"

@@ -1,7 +1,9 @@
 (ns privat24-clj.cli
-  (:require [privat24-clj.session :as session]
+  (:require [privat24-clj.api.session :as session]
             [privat24-clj.api :as api]
-            [privat24-clj.creds :as creds]))
+            [privat24-clj.config :as config]
+            [privat24-clj.api.statement :as st]
+            [privat24-clj.taxes :as tax]))
 
 (defn default-ask-otp
   []
@@ -19,13 +21,12 @@
        (map println)
        doall))
 
-(defn get-creds [] (creds/from-env))
+(defn get-token []
+  (session/authenticate-b-session (config/credentials) default-ask-otp default-ask-otp-dev))
 
 (defn auth-request [req & args]
   (let [req-fn #(apply req % args)
-        response (session/authenticate-b-session (get-creds)
-                                                 default-ask-otp
-                                                 default-ask-otp-dev)]
+        response (get-token)]
     (if (:error response)
       response
       (apply req (get-in response [:session :token]) args))))
@@ -35,3 +36,12 @@
 
 (defn business-statements [date-start date-end]
   (auth-request api/business-statements date-start date-end))
+
+(defn current-quarter-tax-report [filter-map]
+  (let [[date-start date-end] (tax/current-quarter-range)
+        {:keys [error] :as response} (auth-request api/business-statements date-start date-end)]
+    (if error
+      response
+      (->> (:data response)
+           (map st/parse-row)
+           (tax/make-tax-report filter-map)))))

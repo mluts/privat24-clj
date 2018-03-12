@@ -1,4 +1,4 @@
-(ns privat24-clj.session
+(ns privat24-clj.api.session
   (:require [privat24-clj.api :as api]
             [taoensso.timbre :as log]))
 
@@ -31,6 +31,7 @@
 
 (defn handle-otp-step [ask-otp-fn response]
   {:pre [(map? response) (fn? ask-otp-fn)]}
+
   (log/info "Handling otp step")
   (if (get-in response [:session :is-business-role])
     response
@@ -44,8 +45,9 @@
                                                                     "Failed to authenticate business role")
         :else response))))
 
-(defn authenticate-b-session [credentials ask-otp-fn ask-otp-dev-fn]
+(defn authenticate-b-session
   "Returns parsed response"
+  [credentials ask-otp-fn ask-otp-dev-fn]
   {:pre [(map? credentials)
          (= 4 (count credentials))
          (every? fn? [ask-otp-fn ask-otp-dev-fn])]}

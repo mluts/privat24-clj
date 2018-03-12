@@ -1,5 +1,7 @@
 (ns privat24-clj.taxes
-  (:require [clj-time.core :as t]))
+  (:require [clj-time.core :as t]
+            [privat24-clj.api.statement :as st]
+            [clj-time.format :as f]))
 
 (def ^:const ukraine-quarter-months
   [[1 3]
@@ -27,3 +29,54 @@
        (conj (last-quarters prev-end-date (dec n))
              [start-date end-date]))
      nil)))
+
+(defn current-quarter-range []
+  (let [quarter (-> (last-quarters 1) first)]
+    (map st/format-date quarter)))
+
+(defn prev-quarter-range []
+  (let [quarter (-> (last-quarters 2) last)]
+    (map st/format-date quarter)))
+
+(defn last-quarters-range [n]
+  (let [quarters (last-quarters n)
+        end-date (-> (first quarters) second)
+        start-date (-> (last quarters) first)]
+    [(st/format-date start-date)
+     (st/format-date end-date)]))
+
+(defn income? [statement]
+  (< 0 (:amount statement)))
+
+(defn done? [statement]
+  (= :done (st/statement-state statement)))
+
+(defn real? [statement]
+  (= :real (st/statement-type statement)))
+
+(defn custom-filter [[k v]]
+  (let [credit-accounts-filter (fn [credit-accounts statement]
+                                 (contains? (set credit-accounts)
+                                            (get-in statement
+                                                    [:credit :account (keyword "@number")])))]
+    (case k
+      :credit-accounts (partial credit-accounts-filter
+                                (into [] v)))))
+
+(defn add-statement-to-report [report {:keys [amount currency] :as statement}]
+  (letfn [(add-amount [report]
+            (update-in report
+                       [:amount currency]
+                       #(if % (+ % amount) amount)))
+          (add-statement [report]
+                         (update report
+                                 :statements
+                                 #(conj % (:raw statement))))]
+    (->> report
+         add-amount
+         add-statement)))
+
+(defn make-tax-report [filters-map statements]
+  (let [f (apply every-pred income? done? real? (map custom-filter filters-map))]
+    (->> (filter f statements)
+         (reduce add-statement-to-report {}))))

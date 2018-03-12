@@ -36,7 +36,7 @@
 
 (defn parse-session [response]
   (let [data (:data response)
-        roles (->> (get data :roles []))
+        roles (get data :roles [])
         message (:message data)
         parse-device (fn [data] (select-keys data [:id :number]))
         otp-devices (if (sequential? message) (map parse-device message) [])
