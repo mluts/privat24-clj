@@ -16,7 +16,7 @@
   (let [{:keys [error data]} (cli/business-statements date-start date-end)]
     (if error
       (println "ERR: " error)
-      (println (->json data)))))
+      (println (->json data {:pretty true})))))
 
 (defn get-token [opts]
   (-> (cli/get-token)
@@ -28,7 +28,7 @@
   (let [{:keys [error] :as data} (cli/current-quarter-tax-report (select-keys opts [:credit-accounts]))]
     (if error
       (println "ERR: " error)
-      (println (->json data)))))
+      (println (->json data {:pretty true})))))
 
 (def cli-options
   [["-v" "--verbose"]
