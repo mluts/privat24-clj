@@ -1,6 +1,7 @@
 (ns privat24-clj.taxes
   (:require [clj-time.core :as t]
             [privat24-clj.api.statement :as st]
+            [privat24-clj.util :refer [remove-by-val]]
             [clj-time.format :as f]))
 
 (def ^:const ukraine-quarter-months
@@ -77,8 +78,7 @@
          add-statement)))
 
 (defn make-tax-report [filters-map statements]
-  (let [custom-filters (->> (remove #(empty? (val %)) filters-map)
-                            (into {})
+  (let [custom-filters (->> (remove-by-val empty? filters-map)
                             (map custom-filter))
         f (apply every-pred income? done? real? custom-filters)]
     (->> (filter f statements)

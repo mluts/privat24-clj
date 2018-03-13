@@ -8,5 +8,8 @@
 (defn parse-float [str]
   (Float/parseFloat str))
 
-(defn map-remove [pred m]
-  (into {} (remove pred m)))
+(defn remove-by-val [pred m]
+  (into {} (remove (comp pred val) m)))
+
+(defn map-vals [pred m]
+  (into {} (map (juxt key (comp pred val)) m)))

@@ -1,6 +1,6 @@
 (ns privat24-clj.core
   (:require [privat24-clj.cli :as cli]
-            [privat24-clj.util :refer [->json map-remove]]
+            [privat24-clj.util :refer [->json]]
             [clojure.tools.cli :as opts]
             [clojure.string :as string]
             [taoensso.timbre :as timbre])
