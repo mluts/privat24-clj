@@ -1,6 +1,6 @@
 (ns privat24-clj.core
   (:require [privat24-clj.cli :as cli]
-            [privat24-clj.util :refer [->json]]
+            [privat24-clj.util :refer [->json map-remove]]
             [clojure.tools.cli :as opts]
             [clojure.string :as string]
             [taoensso.timbre :as timbre])
@@ -25,15 +25,15 @@
       println))
 
 (defn tax-report [opts]
-  (let [{:keys [error] :as data} (cli/current-quarter-tax-report)]
+  (let [{:keys [error] :as data} (cli/current-quarter-tax-report (select-keys opts [:credit-accounts]))]
     (if error
       (println "ERR: " error)
       (println (->json data)))))
 
 (def cli-options
   [["-v" "--verbose"]
-   "-C" "--credit-accounts ACCOUNT[,ACCOUNT...]" "Credit account numbers separated by comma"
-   :parse-fn #(string/split % #",")])
+   ["-C" "--credit-accounts ACCOUNT[,ACCOUNT...]" "Credit account numbers separated by comma"
+    :parse-fn #(string/split % #",")]])
 
 (def commands
   {"check-auth" check-auth
@@ -63,8 +63,8 @@
 (defn process-opts [options]
   (timbre/set-level! (if (:verbose options) :debug :warn)))
 
-(defn process-cmd [cmd cmd-args]
-  (apply (get commands cmd) cmd-args))
+(defn process-cmd [cmd opts cmd-args]
+  (apply (get commands cmd) opts cmd-args))
 
 (defn -main
   "CLI entry point"

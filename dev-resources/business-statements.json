@@ -1,0 +1,41 @@
+[
+  {
+    "info": {
+      "@postdate": "20180201T02:18:00",
+      "@refp": "1",
+      "@state": "r",
+      "@flinfo": "r"
+    },
+
+    "amount": {
+      "@amt": "50.0",
+      "@ccy": "USD"
+    },
+
+    "credit": {
+      "account":  {
+        "@number": "123"
+      }
+    }
+  },
+
+  {
+    "info": {
+      "@postdate": "20180201T02:19:00",
+      "@refp": "2",
+      "@state": "r",
+      "@flinfo": "r"
+    },
+
+    "amount": {
+      "@amt": "100.0",
+      "@ccy": "USD"
+    },
+
+    "credit": {
+      "account":  {
+        "@number": "456"
+      }
+    }
+  }
+]

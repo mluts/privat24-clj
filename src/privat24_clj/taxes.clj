@@ -49,34 +49,37 @@
   (< 0 (:amount statement)))
 
 (defn done? [statement]
-  (= :done (st/statement-state statement)))
+  (= :done (:state statement)))
 
 (defn real? [statement]
-  (= :real (st/statement-type statement)))
+  (= :real (:type statement)))
+
+(defn credit-accounts-filter [credit-accounts statement]
+  {:pre [(sequential? credit-accounts) (map? statement)]}
+  (contains? (set (map str credit-accounts))
+             (get statement :credit-account-number)))
 
 (defn custom-filter [[k v]]
-  (let [credit-accounts-filter (fn [credit-accounts statement]
-                                 (contains? (set credit-accounts)
-                                            (get-in statement
-                                                    [:credit :account (keyword "@number")])))]
-    (case k
-      :credit-accounts (partial credit-accounts-filter
-                                (into [] v)))))
+  (case k
+    :credit-accounts (partial credit-accounts-filter (vec v))))
 
 (defn add-statement-to-report [report {:keys [amount currency] :as statement}]
   (letfn [(add-amount [report]
             (update-in report
-                       [:amount currency]
+                       [:amount (keyword currency)]
                        #(if % (+ % amount) amount)))
           (add-statement [report]
                          (update report
                                  :statements
-                                 #(conj % (:raw statement))))]
+                                 #(conj % statement)))]
     (->> report
          add-amount
          add-statement)))
 
 (defn make-tax-report [filters-map statements]
-  (let [f (apply every-pred income? done? real? (map custom-filter filters-map))]
+  (let [custom-filters (->> (remove #(empty? (val %)) filters-map)
+                            (into {})
+                            (map custom-filter))
+        f (apply every-pred income? done? real? custom-filters)]
     (->> (filter f statements)
          (reduce add-statement-to-report {}))))

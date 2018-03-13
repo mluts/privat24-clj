@@ -5,14 +5,14 @@
             [privat24-clj.util :refer [<-json ->json]]
             [slingshot.slingshot :refer [try+]]))
 
-(def ^:const base-uri "https://link.privatbank.ua/api")
+(def base-uri "https://link.privatbank.ua/api")
 
-(def ^:const default-headers {:content-type "application/json"
-                              :accept "application/json"})
+(def default-headers {:content-type "application/json"
+                      :accept "application/json"})
 
-(def ^:const ttl-delta 30) ; 30 seconds
+(def ttl-delta 30) ; 30 seconds
 
-(def ^:const business-role-str "ROLE_P24_BUSINESS")
+(def business-role-str "ROLE_P24_BUSINESS")
 
 (defn- timestamp [] (int (/ (System/currentTimeMillis) 1000)))
 

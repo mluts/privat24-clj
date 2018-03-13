@@ -21,6 +21,18 @@
          (filter identity)
          first)))
 
+(defn- statement-state [statement]
+  (case (get-in statement [:info (keyword "@state")])
+    "r" :done
+    "t" :rollback
+    nil))
+
+(defn- statement-type [statement]
+  (case (get-in statement [:info (keyword "@flinfo")])
+    "r" :real
+    "i" :info
+    nil))
+
 (defn parse-row [row]
   {:amount (-> (get-in row [:amount (keyword "@amt")])
                (util/parse-float))
@@ -29,14 +41,7 @@
    :detected-currency-rate (detect-currency-rate row)
    :datetime (when-let [post-date (get-in row [:info (keyword "@postdate")])]
                (f/parse (statement-post-date-formatter) post-date))
-   :raw row})
-
-(defn statement-state [statement]
-  (case (get-in statement [:raw :info (keyword "@state")])
-    "r" :done
-    "t" :rollback))
-
-(defn statement-type [statement]
-  (case (get-in statement [:raw :info (keyword "@flinfo")])
-    "r" :real
-    "i" :info))
+   :credit-account-number (get-in row [:credit :account (keyword "@number")])
+   :id (get-in row [:info (keyword "@refp")])
+   :state (statement-state row)
+   :type (statement-type row)})
