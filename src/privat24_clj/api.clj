@@ -22,9 +22,9 @@
   ([] default-headers)
   ([& h] (apply merge default-headers h)))
 
-(defn parse-response [raw]
+(defn parse-response [{:keys [status body]}]
   (let [status (:status raw)
-        data (try (<-json (:body raw))
+        data (try (<-json body)
                   (catch com.fasterxml.jackson.core.JsonParseException _ {:error "Failed to parse the response"}))
         error (:error data)]
     {:raw raw

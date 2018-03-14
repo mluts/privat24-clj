@@ -46,14 +46,14 @@
     [(st/format-date start-date)
      (st/format-date end-date)]))
 
-(defn income? [statement]
-  (< 0 (:amount statement)))
+(defn- income? [{:keys [amount]}]
+  (< 0 amount))
 
-(defn done? [statement]
-  (= :done (:state statement)))
+(defn- done? [{:keys [state]}]
+  (= :done state))
 
-(defn real? [statement]
-  (= :real (:type statement)))
+(defn- real? [{:keys [type]}]
+  (= :real type))
 
 (defn credit-accounts-filter [credit-accounts statement]
   {:pre [(sequential? credit-accounts) (map? statement)]}

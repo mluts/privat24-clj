@@ -21,27 +21,31 @@
          (filter identity)
          first)))
 
-(defn- statement-state [statement]
-  (case (get-in statement [:info (keyword "@state")])
+(defn- statement-state [{{state (keyword "@state")} :info}]
+  (case state
     "r" :done
     "t" :rollback
     nil))
 
-(defn- statement-type [statement]
-  (case (get-in statement [:info (keyword "@flinfo")])
+(defn- statement-type [{{type (keyword "@flinfo")} :info}]
+  (case type
     "r" :real
     "i" :info
     nil))
 
-(defn parse-row [row]
-  {:amount (-> (get-in row [:amount (keyword "@amt")])
-               (util/parse-float))
-   :currency (get-in row [:amount (keyword "@ccy")])
-   :purpose (:purpose row)
+(defn parse-row [{{amount (keyword "@amt")
+                   currency (keyword "@ccy")} :amount
+                  {post-date (keyword "@postdate")
+                   id (keyword "@refp")} :info
+                  purpose :purpose
+                  {{credit-account-number (keyword "@number")} :account} :credit
+                  :as row}]
+  {:amount (util/parse-float amount)
+   :currency currency
+   :purpose purpose
    :detected-currency-rate (detect-currency-rate row)
-   :datetime (when-let [post-date (get-in row [:info (keyword "@postdate")])]
-               (f/parse (statement-post-date-formatter) post-date))
-   :credit-account-number (get-in row [:credit :account (keyword "@number")])
-   :id (get-in row [:info (keyword "@refp")])
+   :datetime (when post-date (f/parse (statement-post-date-formatter) post-date))
+   :credit-account-number credit-account-number
+   :id id
    :state (statement-state row)
    :type (statement-type row)})
