@@ -67,7 +67,7 @@
 (defn add-statement-to-report [report {:keys [amount currency] :as statement}]
   (letfn [(add-amount [report]
             (update-in report
-                       [:amount (keyword currency)]
+                       [:taxable-amount (keyword currency)]
                        #(if % (+ % amount) amount)))
           (add-statement [report]
                          (update report

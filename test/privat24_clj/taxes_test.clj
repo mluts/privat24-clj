@@ -25,6 +25,6 @@
 
         (get statements-map "2") (first (:statements report3))
 
-        150.0 (get-in report1 [:amount :USD])
-        150.0 (get-in report2 [:amount :USD])
-        100.0 (get-in report3 [:amount :USD])))))
+        150.0 (get-in report1 [:taxable-amount :USD])
+        150.0 (get-in report2 [:taxable-amount :USD])
+        100.0 (get-in report3 [:taxable-amount :USD])))))

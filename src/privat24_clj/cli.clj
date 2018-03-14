@@ -26,10 +26,10 @@
 
 (defn auth-request [req & args]
   (let [req-fn #(apply req % args)
-        response (get-token)]
-    (if (:error response)
-      response
-      (apply req (get-in response [:session :token]) args))))
+        {:keys [error token] :as result} (get-token)]
+    (if error
+      result
+      (apply req token args))))
 
 (defn check-auth []
   (auth-request api/validate-session))

@@ -19,10 +19,8 @@
       (println (->json data {:pretty true})))))
 
 (defn get-token [opts]
-  (-> (cli/get-token)
-      (get-in [:session :token])
-      str
-      println))
+  (let [{:keys [token]} (cli/get-token)]
+    (println (str token))))
 
 (defn tax-report [opts]
   (let [{:keys [error] :as data} (cli/current-quarter-tax-report (select-keys opts [:credit-accounts]))]
