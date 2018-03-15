@@ -22,14 +22,17 @@
   (let [{:keys [token]} (cli/get-token)]
     (println (str token))))
 
-(defn tax-report [opts]
-  (let [{:keys [error] :as data} (cli/current-quarter-tax-report (select-keys opts [:credit-accounts]))]
+(defn tax-report [{:keys [credit-accounts prev-quarter]}]
+  (let [{:keys [error] :as data} (if prev-quarter
+                                   (cli/prev-quarter-tax-report {:credit-accounts credit-accounts})
+                                   (cli/current-quarter-tax-report {:credit-accounts credit-accounts}))]
     (if error
       (println "ERR: " error)
       (println (->json data {:pretty true})))))
 
 (def cli-options
   [["-v" "--verbose"]
+   ["-p" "--prev-quarter"]
    ["-C" "--credit-accounts ACCOUNT[,ACCOUNT...]" "Credit account numbers separated by comma"
     :parse-fn #(string/split % #",")]])
 
