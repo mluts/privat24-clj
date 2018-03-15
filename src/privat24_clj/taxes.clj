@@ -1,7 +1,6 @@
 (ns privat24-clj.taxes
   (:require [clj-time.core :as t]
             [privat24-clj.api.statement :as st]
-            [privat24-clj.util :refer [remove-by-val]]
             [medley.core :as m]
             [clj-time.format :as f]))
 

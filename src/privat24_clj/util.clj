@@ -11,10 +11,4 @@
 (defn parse-double [str]
   (Double/parseDouble str))
 
-(defn remove-by-val [pred m]
-  (into {} (remove (comp pred val) m)))
-
-(defn map-vals [pred m]
-  (into {} (map (juxt key (comp pred val)) m)))
-
 (add-encoder org.joda.time.DateTime encode-str)

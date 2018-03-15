@@ -5,12 +5,14 @@
             [privat24-clj.util :refer [<-json ->json]]
             [slingshot.slingshot :refer [try+]]))
 
-(def base-uri "https://link.privatbank.ua/api")
+(def base-uri
+  "API base url. Always prepended before path whan calling get-request and post-request"
+  "https://link.privatbank.ua/api")
 
-(def default-headers {:content-type "application/json"
-                      :accept "application/json"})
-
-(def ttl-delta 30) ; 30 seconds
+(def default-headers
+  "Default headers for API requests"
+  {:content-type "application/json"
+   :accept "application/json"})
 
 (def business-role-str "ROLE_P24_BUSINESS")
 
@@ -33,7 +35,9 @@
               (not (<= 200 status 299)) (str "HTTP Status: " status)
               :else nil)}))
 
-(defn parse-session [response]
+(defn parse-session
+  "Makes (assoc response :session session) where session is map with login session data"
+  [response]
   (let [data (:data response)
         roles (get data :roles [])
         message (:message data)
@@ -50,6 +54,7 @@
   (<= (get session :expires_in 0) (timestamp)))
 
 (defn get-request
+  "Makes GET request to given path on API"
   ([path params token]
    (let [uri (make-uri path)
          headers (merge default-headers
@@ -60,6 +65,7 @@
           parse-response))))
 
 (defn post-request
+  "Makes POST request to given path on API"
   ([path data] (post-request path data {}))
   ([path data headers]
    (let [uri (make-uri path)

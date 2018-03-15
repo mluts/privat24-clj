@@ -1,6 +1,5 @@
 (ns privat24-clj.api.statement
   (:require [privat24-clj.util :as util]
-            [privat24-clj.util :as util]
             [clj-time.format :as f]))
 
 (defn date-formatter []
