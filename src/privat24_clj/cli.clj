@@ -37,11 +37,14 @@
 (defn business-statements [date-start date-end]
   (auth-request api/business-statements date-start date-end))
 
-(defn current-quarter-tax-report [filter-map]
+(defn current-quarter-tax-report [filters-map]
   (let [[date-start date-end] (tax/current-quarter-range)
         {:keys [error] :as response} (auth-request api/business-statements date-start date-end)]
     (if error
       response
       (->> (:data response)
            (map st/parse-row)
-           (tax/make-tax-report filter-map)))))
+           (tax/make-tax-report {:filters-map filters-map
+                                 :date-start date-start
+                                 :date-end date-end
+                                 :name "Currency Quarter Taxes"})))))

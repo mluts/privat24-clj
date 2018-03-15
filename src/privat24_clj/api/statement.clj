@@ -13,13 +13,11 @@
   (f/formatter "yyyyMMdd'T'HH:mm:ss"))
 
 (defn detect-currency-rate [row]
-  (let [detect-by-purpose (fn [row]
-                            (let [m (re-matches #"(по\s+курсу\s+)(\d+\.\d+)" (str (:purpose row)))]
-                              (when m
-                                (util/parse-float (last m)))))]
-    (->> (map #(% row) [detect-by-purpose])
-         (filter identity)
-         first)))
+  (letfn [(detect-by-purpose [{:keys [purpose]}]
+            (let [[_ rate] (re-find #"продажу.+?USD.+?по\s+курсу\s+(\d+\.\d+)" (str purpose))]
+              (when rate
+                {:USD {:UAH (util/parse-double rate)}})))]
+    (detect-by-purpose row)))
 
 (defn- statement-state [{{state (keyword "@state")} :info}]
   (case state
@@ -40,7 +38,7 @@
                   purpose :purpose
                   {{credit-account-number (keyword "@number")} :account} :credit
                   :as row}]
-  {:amount (util/parse-float amount)
+  {:amount (util/parse-double amount)
    :currency currency
    :purpose purpose
    :detected-currency-rate (detect-currency-rate row)

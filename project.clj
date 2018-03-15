@@ -10,6 +10,7 @@
                  [clj-time "0.14.2"]
                  [cheshire "5.8.0"]
                  [slingshot "0.12.2"]
+                 [medley "1.0.0"]
                  [com.taoensso/timbre "4.10.0"]]
   :main ^:skip-aot privat24-clj.core
   :target-path "target/%s"

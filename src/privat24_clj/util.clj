@@ -8,8 +8,8 @@
 
 (defn <-json [str] (json/decode str keyword))
 
-(defn parse-float [str]
-  (Float/parseFloat str))
+(defn parse-double [str]
+  (Double/parseDouble str))
 
 (defn remove-by-val [pred m]
   (into {} (remove (comp pred val) m)))
